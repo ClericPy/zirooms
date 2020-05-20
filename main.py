@@ -14,8 +14,9 @@ PROXY = '218.60.8.99:3129'
 
 def check_proxy():
     req = tPool()
-    local_text = req.get('http://myip.ipip.net/', timeout=3).text
+    local_text = req.get('http://myip.ipip.net/', retry=1, timeout=3).text
     proxy_r = req.get('http://myip.ipip.net/',
+                      retry=1,
                       timeout=3,
                       proxies={
                           'http': PROXY,
@@ -27,6 +28,7 @@ def check_proxy():
     print('代理地址 OK, 开始抓取', SEARCH_URLS)
 
 
+CHECK_INTERVAL = 300
 PROXY = '116.196.85.150:3128'
 MAX_DISTANCE = 1000
 SEARCH_URLS = []
@@ -235,7 +237,7 @@ def alert():
     import os
     os.system(r'explorer.exe .')
     import winsound
-    for _ in range(3):
+    for _ in range(5):
         winsound.Beep(900, 300)
 
 
@@ -263,10 +265,10 @@ def main():
         print('没有新房间')
 
 
-def loop(interval=300):
+def loop():
     while 1:
         main()
-        countdown(interval)
+        countdown(CHECK_INTERVAL)
 
 
 if __name__ == "__main__":
