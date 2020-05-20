@@ -10,6 +10,23 @@ https://ip.ihuan.me/address/5YyX5Lqs.html
 PROXY = '111.202.247.50:8080'
 PROXY = '218.60.8.99:3129'
 '''
+
+
+def check_proxy():
+    req = tPool()
+    local_text = req.get('http://myip.ipip.net/', timeout=3).text
+    proxy_r = req.get('http://myip.ipip.net/',
+                      timeout=3,
+                      proxies={
+                          'http': PROXY,
+                          'https': PROXY
+                      }).x
+    if not proxy_r or proxy_r.text == local_text:
+        print(f'{PROXY} 代理故障, 请更换代理地址. {proxy_r}: {proxy_r.text}')
+        quit()
+    print('代理地址 OK, 开始抓取', SEARCH_URLS)
+
+
 PROXY = '116.196.85.150:3128'
 MAX_DISTANCE = 1000
 SEARCH_URLS = []
@@ -20,7 +37,7 @@ with open('list_urls.txt', encoding='u8') as f:
 if not SEARCH_URLS:
     print('需要先在 list_urls.txt 文件里按行放入自如搜索页的 URL')
     quit()
-print('Crawling', SEARCH_URLS)
+check_proxy()
 req = tPool()
 kwargs = {
     'headers': {

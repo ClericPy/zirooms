@@ -2,3 +2,4 @@ data.txt
 data.json
 .mypy_cache/*
 *.pyc
+list_urls.txt
