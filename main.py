@@ -1,191 +1,220 @@
-#! python3
-import json
+# -*- coding: utf-8 -*-
+
 import re
-import time
-import traceback
-from collections import namedtuple
 
-from lxml.html import fromstring
-from torequests.dummy import Requests as tPool
-from torequests.main import tPool
-from torequests.utils import UA, Counts, Saver, ttime, unique
-
-# 121.8.98.197:80
-# 121.58.17.52:80
-# 61.136.163.246:3128
-# 61.136.163.246:8103
-# 61.136.163.245:3128
-# 119.254.11.50:80
-# 123.57.76.102:80
-# 120.92.88.202:10000
-# 140.205.222.3:80
-# 61.136.163.245:8103
-# 119.28.138.104:3128
-# 113.214.13.1:8000
-# 178.62.117.231:3128
-# 101.37.79.125:3128
-PROXY = '121.8.98.197:80'
-# rid, name, url, price, floor, room, area, orient, female, subway, station, distance, neighbor, create_time, uptime
+from bs4 import BeautifulSoup
+from torequests import threads, tPool
+from torequests.utils import Counts, Saver, countdown, find_one, ttime
+'''
+https://ip.ihuan.me/address/5YyX5Lqs.html
+PROXY = '111.202.247.50:8080'
+PROXY = '218.60.8.99:3129'
+'''
+PROXY = '116.196.85.150:3128'
+MAX_DISTANCE = 1000
+SEARCH_URLS = []
+with open('list_urls.txt', encoding='u8') as f:
+    for line in f:
+        if line.startswith('http'):
+            SEARCH_URLS.append(line.strip())
+if not SEARCH_URLS:
+    print('需要先在 list_urls.txt 文件里按行放入自如搜索页的 URL')
+    quit()
+print('Crawling', SEARCH_URLS)
 req = tPool()
-total = 0
-counter = Counts()
-next_pages = []
-interval = 300
+kwargs = {
+    'headers': {
+        "Connection": "keep-alive",
+        "Cache-Control": "max-age=0",
+        "Upgrade-Insecure-Requests": "1",
+        "Dnt": "1",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Cookie": ""
+    },
+    'retry': 3,
+    'proxies': {
+        'http': PROXY,
+        'https': PROXY
+    },
+    'timeout': 3
+}
+keys = 'room_id, title, location, distance, price, area, rooms, floor, max_floor, target, other_rooms, girls, score, time, status, url'.split(
+    ', ')
+cc = Counts()
+total_rooms_count = 0
+ss = Saver('./data.json')
+if not ss.rooms:
+    ss.rooms = {}
 
 
-def list_cb(r):
-    result = []
-    if not r.x:
-        return result
-    scode = r.text
-    if not scode or 'class="nomsg area"' in scode:
-        print(counter.x, '/', total, r.url_string)
-        return result
-    rooms = fromstring(scode).cssselect('#houseList > li')
-    if not rooms:
-        return result
-    next_page = [
-        re.sub('^//', 'http://', i.get('href'))
-        for i in fromstring(scode).cssselect('#page>a:not([class])')
-    ]
-    if next_page:
-        next_pages.extend(next_page)
-    for i in rooms:
-        url = re.sub('^//', 'http://', i.cssselect('.t1')[0].get('href'))
-        subway_info = i.cssselect('.detail > p:nth-child(2) > span')[0].text
-        subway_info = re.search('(\d+)号线(.*?)站(\d+)米', subway_info)
-        subway = subway_info.group(1)
-        station = subway_info.group(2)
-        distance = subway_info.group(3)
-        rid = re.search('/(\d+)\.html', url).group(1)
-        meta = dict(
-            url=url, subway=subway, station=station, distance=distance, rid=rid)
-        result.append(meta)
-    print(counter.x, '/', total, r.url_string, len(result))
-    return result
-
-
-def fetch_list(urls):
-    result = []
-    for _ in range(2):
-        global total
-        counter.current = counter.start
-        total = len(urls)
-        tasks = [
-            req.get(
-                url,
-                callback=list_cb,
-                retry=8,
-                timeout=5,
-                proxies={'http': PROXY},
-                headers={
-                    'User-agent': UA.Chrome
-                }) for url in urls
-        ]
-        req.x
-        task_result = [i.cx for i in tasks if i.x]
-        detail_urls = sum(task_result, [])
-        result.extend(detail_urls)
-        if next_pages:
-            urls = next_pages
-        else:
+def fetch_list(url):
+    scode = ''
+    for _ in range(5):
+        if '已为您找到符合条件' in scode and 'page' in scode:
             break
-    next_pages.clear()
-    return result
-
-
-def detail_cb(r):
-    try:
-        meta = {}
-        if not r.x:
-            print(counter.x, '/', total, r.x.error)
-            return meta
-        r = r.x
+        r = req.get(url, **kwargs)
         scode = r.text
-        if not scode or 'class="nopage-pic"' in scode:
-            print(counter.x, '/', total, 'nopage-pic')
-            return meta
-        tree = fromstring(scode)
-        if not tree.cssselect('.room_name>h2'):
-            print(r.url_string)
-        try:
-            button = tree.cssselect('#zreserve')[0].text_content().strip()
-        except:
-            traceback.print_exc()
-            button = 'error'
-        if button in ('已下定', '已出租'):
-            print(counter.x, '/', total, button)
-            return meta
-        name = tree.cssselect('.room_name>h2')[0].text.strip().replace(',', ' ')
-        price = re.sub('\D', '', tree.cssselect('#room_price')[0].text)
-        if len(price) < 4:
-            # price = str(int(price) * 365 // 12)
-            return meta
-        room_info = tree.cssselect('.detail_room')[0].text_content()
-        area = re.search('([\d\.]+)\s*㎡', room_info).group(1)
-        rooms = re.search('户型.\s*(\d+)\s*室', room_info).group(1)
-        floor, max_floor = re.search('楼层.\s*([\d\w/]+)\s*层',
-                                     room_info).group(1).split('/')
-        floor = re.search('(\d+)', floor).group(1)
-        orient = re.search('朝向.\s*(\S+)', room_info).group(1)
-        neighbor = (''.join(
-            (i.get('class').strip() or 'X'
-             for i in tree.cssselect('.greatRoommate>ul>li')))).replace(
-                 'current', '空').replace('woman',
-                                         '女').replace('man', '男').replace(
-                                             'last', '').replace(' ', '')
-        female = neighbor.count('女')
-        if '空' not in neighbor:
-            print(counter.x, '/', total, '无空房')
-            return meta
-        new_meta = dict(
-            name=name,
-            price=price,
-            area=area,
-            rooms=rooms,
-            floor=floor,
-            max_floor=max_floor,
-            orient=orient,
-            neighbor=neighbor,
-            button=button,
-            female=female)
-        meta.update(new_meta)
-        print(counter.x, '/', total, 'ok')
-        return meta
-    except:
-        traceback.print_exc()
-        print(r.url_string)
-        return {}
-
-
-def fetch_detail(detail_metas):
-    global total
-    counter.current = counter.start
-    total = len(detail_metas)
-    result = []
-    tasks = [[
-        req.get(
-            meta['url'],
-            callback=detail_cb,
-            retry=8,
-            timeout=5,
-            proxies={'http': PROXY},
-            headers={
-                'User-agent': UA.Chrome
-            }), meta
-    ] for meta in detail_metas]
-    req.x
-    for i in tasks:
-        task, meta = i
-        new_meta = task.cx
-        if task.x:
-            if new_meta:
-                meta.update(new_meta)
-                result.append(meta)
+    else:
+        print(scode)
+        print('程序崩溃, fetch_list 重试次数过多')
+        quit()
+    result = {'items': []}
+    html = BeautifulSoup(scode, features='html.parser')
+    # print(scode)
+    title = html.select_one('title').text
+    page = html.select_one('#page>a.active')
+    page = page.text if page else '1'
+    total_page = find_one(r'<span>(共\d+页)</span>', scode)[1] or '共1页'
+    print(f'采集第 {page} 页 ({total_page}) {title}')
+    if total_page != '共1页':
+        page1_link = html.select_one('#page>a:nth-of-type(1)')
+        if page1_link:
+            href = page1_link.get('href')
+            if href:
+                if href.startswith('//'):
+                    href = f'http:{href}'
+                if '-p1/' in href:
+                    template = re.sub(r'-p1/(\?|$)', '-p{}/\\1', href)
+                    max_page = int(find_one(r'\d+', total_page)[0])
+                    result['next_pages'] = [
+                        template.format(page)
+                        for page in range(2, max_page + 1)
+                    ]
+    items = html.select('.Z_list>.Z_list-box>.item')
+    for i in items:
+        a = i.select_one('h5.title>a')
+        location = i.select_one('.location')
+        if a and location:
+            href = a.get('href')
+            if href:
+                if href.startswith('//'):
+                    href = f'http:{href}'
+                location, distance = re.findall(r'距(.*?)站步行约(\d+)米',
+                                                str(location))[0]
+                desc = i.select_one('.desc>div')
+                title = a.text.strip().replace('自如友家·', '')
+                area, floor, max_floor = re.findall(
+                    r'([\.0-9]+)㎡ \| (\d+)/(\d+)层', desc.text)[0]
+                tag = i.select_one('.info-box>h5').get('class')[-1]
+                result['items'].append({
+                    'url': href,
+                    'title': title,
+                    'area': float(area),
+                    'floor': int(floor),
+                    'max_floor': int(max_floor),
+                    'distance': int(distance),
+                    'location': location,
+                    'status': tag,
+                })
+    print(f'采集到 {len(items)} 个房间, 在第 {page} 页 {title}')
     return result
 
 
-def alarm():
+def get_score(item):
+    score = 0
+    target_score = ['朝南', '朝东南', '朝东', '朝西南', '朝北', '朝东北', '朝西北', '朝西']
+    # 朝向加分
+    if item['target'] in target_score:
+        score += (10 - target_score.index(item['target'])) / 10
+    else:
+        score += 0
+    # 女生数量减分, 每多一个, 减 0.5 分
+    score -= 0.5 * item['girls']
+    # 地铁距离分数, 越近分数越高
+    score += (1000 - item['distance']) / 1000
+    # 楼层分数, 越高越好, 但是顶楼和 1 楼则分数打 1 折
+    if item['floor'] == item['max_floor'] or item['floor'] == 1:
+        score -= 1
+    else:
+        floor = item['floor']
+        # 2 - 5, 6 - 9, 10+ 分三档
+        if 2 <= floor <= 4:
+            # 蚊子有点多, 也就比 1 楼好一丁点
+            # 所以 2 3 4 分三个档
+            score -= [0.7, 0.6, 0.5][floor - 2]
+        elif 5 <= floor <= 7:
+            # 蚊子少了点, 5 6 7 也是三个档, 但相对来说问题不算太大
+            score -= [0.3, 0.2, 0.1][floor - 5]
+        else:
+            # 蚊子在 8 楼以上就很少了, 越高分越高吧, 但不要超过 1 分
+            score += min(((floor - 8) / 10, 1))
+    # 面积越大越好, 最小算 6 平的话, 每比 6 平多一平, 分数上升 0.2
+    score += (item['area'] - 6) / 5
+    # 房间数影响很大, 所以二居室比三居室提升巨大, 所以直接按比例来搞
+    # 一般都是三居室, 所以用 3 除以房间数
+    score *= 3 / item['rooms']
+    return round(score, 2)
+
+
+@threads(3)
+def fetch_detail(item):
+    item['room_id'] = find_one(r'/x/(\d+)\.html', item['url'])[1]
+    if item['room_id'] in ss.rooms:
+        item.update(ss.rooms[item['room_id']])
+        return item
+    print(cc.x,
+          '/',
+          total_rooms_count,
+          '采集房间',
+          item['title'],
+          item['url'],
+          flush=1)
+    scode = ''
+    for _ in range(5):
+        if 'Z_name' in scode:
+            break
+        r = req.get(item['url'], **kwargs)
+        scode = r.text
+    else:
+        print(scode)
+        print('程序崩溃, fetch_detail 重试次数过多')
+        quit()
+    html = BeautifulSoup(scode, features='html.parser')
+    item['title'] = html.select_one('h1.Z_name').text.replace('自如友家·', '')
+    neighbors = html.select('#meetinfo ul.rent_list>li')
+    item['rooms'] = len(neighbors) + 1
+    genders = {'女', '男'}
+    other_rooms = ''
+    for n in neighbors:
+        gender = n.select_one('.info>.mt10>span').text.strip()
+        if gender in genders:
+            other_rooms += gender
+        else:
+            other_rooms += '空'
+    item['other_rooms'] = other_rooms
+    item['status'] = '可预约:' + item['status'] if html.select_one(
+        '[class="Z_prelook active"]') else '不可预约:' + item['status']
+    item['target'] = html.select_one(
+        '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
+    item['girls'] = item['other_rooms'].count('女')
+    item['score'] = get_score(item)
+    item['price'] = '-'
+    item['time'] = ttime()
+    string = '\t'.join([str(item[i]) for i in keys])
+    print(string, flush=1)
+    item['string'] = string
+    return item
+
+
+def fetch_rooms(url):
+    rooms = []
+    result = fetch_list(url)
+    items = result.get('items')
+    if items:
+        rooms.extend(items)
+    next_pages = result.get('next_pages')
+    if next_pages:
+        print('loading next_pages:', next_pages)
+        for new_url in next_pages:
+            result = fetch_list(new_url)
+            items = result.get('items') or []
+            rooms.extend(items)
+    return rooms
+
+
+def alert():
     import os
     os.system(r'explorer.exe .')
     import winsound
@@ -193,104 +222,35 @@ def alarm():
         winsound.Beep(900, 300)
 
 
-def work():
-
-    with open('list_urls.txt', 'r', encoding='u8') as f:
-        list_urls = f.read()
-        list_urls = [i.strip() for i in list_urls.splitlines()]
-        list_urls = set([i for i in list_urls if i])
-    try:
-        with open('ziru_old_metas_dict.txt') as f:
-            old_metas_dict = json.load(f)
-    except FileNotFoundError:
-        old_metas_dict = {}
-
-    detail_metas = fetch_list(list_urls) + list(old_metas_dict.values())
-    # print(fetch_list(list_urls))
-    # return
-    detail_metas_unique = {}
-    for meta in detail_metas:
-        rid = meta['rid']
-        if rid not in detail_metas_unique:
-            detail_metas_unique[rid] = meta
-        else:
-            if int(meta['distance']) < int(
-                    detail_metas_unique[rid]['distance']):
-                detail_metas_unique[rid] = meta
-    detail_metas = list(detail_metas_unique.values())
-    # print(len(details), 'rooms')
-    metas = fetch_detail(detail_metas)
-    now = ttime()
-    for meta in metas:
-        score = 0
-        score -= int(meta['female']) * 0.5
-        if int(meta['floor']) <= 6:
-            score += 0
-        elif int(meta['floor']) < 12:
-            score += 0.5
-        else:
-            score += 1
-        score += 3 - int(meta['rooms'])
-        score += (float(meta['area']) - 10) * 0.1
-        distance = int(meta['distance'])
-        price = int(meta['price'])
-        score += round((2500 - price) / 100) * 0.2
-        if re.search('0[34567]卧', meta['name']):
-            score -= 0.5
-        if meta['floor'] == meta['max_floor']:
-            score -= 1
-        if distance < 500:
-            score += 1
-        elif distance < 1000:
-            score += 0.5
-        elif distance > 1500:
-            score -= 0.5
-        meta['score'] = round(score, 2)
-        if meta['rid'] in old_metas_dict:
-            meta['create_time'] = old_metas_dict[meta['rid']].get(
-                'create_time') or now
-        else:
-            meta['create_time'] = now
-
-    metas.sort(key=lambda x: x['score'], reverse=1)
-    keys = 'rid name subway station distance price area rooms floor max_floor orient neighbor female score create_time button url'.split(
-    )
-    has_new = 0
-    with open('ziru_now.txt', 'w', encoding='u8') as f:
-        with open('ziru_new.txt', 'a', encoding='u8') as ff:
-            print(*keys, sep='\t', file=f)
-            for i in metas:
-                print(
-                    *[re.sub('\s+', ' ', str(i[key])) for key in keys],
-                    sep='\t',
-                    file=f)
-                if i['create_time'] == now:
-                    print(
-                        *[re.sub('\s+', ' ', str(i[key])) for key in keys],
-                        sep='\t',
-                        file=ff)
-                    print('new!')
-                    has_new = 1
-
-    # save
-    metas_dict = {i['rid']: i for i in metas}
-    with open('ziru_old_metas_dict.txt', 'w') as f:
-        json.dump(metas_dict, f)
-    if has_new:
-        alarm()
-
-
 def main():
-    # work()
+    global total_rooms_count
+    rooms = []
+    for url in SEARCH_URLS:
+        rooms += fetch_rooms(url)
+        # print(rooms)
+    rooms = [i for i in rooms if i['distance'] <= MAX_DISTANCE]
+    total_rooms_count = len(rooms)
+    tasks = [fetch_detail(room) for room in rooms]
+    rooms = [i.x for i in tasks]
+    result = [room['string'] if room else room.text for room in rooms]
+    print('\n'.join(result), file=open('data.txt', 'w', encoding='u8'))
+    # 旧 room 里有, 新 room 里没有的话, 说明被删了, 清理掉
+    # 每次存储只存新的
+    new_rooms = {room['room_id']: room for room in rooms}
+    has_new_room = new_rooms.keys() - ss.rooms.keys()
+    ss.rooms = new_rooms
+    if has_new_room:
+        print('新房间')
+        alert()
+    else:
+        print('没有新房间')
+
+
+def loop(interval=300):
     while 1:
-        work()
-        print(ttime())
-        tick = 10
-        for _ in range(interval // tick):
-            print(_, '.', end='', flush=1)
-            time.sleep(tick)
-        print()
+        main()
+        countdown(interval)
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    loop()
