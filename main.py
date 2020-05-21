@@ -25,20 +25,12 @@ def check_proxy():
     if not proxy_r or proxy_r.text == local_text:
         print(f'{PROXY} 代理故障, 请更换代理地址. {proxy_r}: {proxy_r.text}')
         quit()
-    print('代理地址 OK, 开始抓取', SEARCH_URLS)
+    print('代理地址 OK, 开始抓取')
 
 
 CHECK_INTERVAL = 300
 PROXY = '116.196.85.150:3128'
 MAX_DISTANCE = 1000
-SEARCH_URLS = []
-with open('list_urls.txt', encoding='u8') as f:
-    for line in f:
-        if line.startswith('http'):
-            SEARCH_URLS.append(line.strip())
-if not SEARCH_URLS:
-    print('需要先在 list_urls.txt 文件里按行放入自如搜索页的 URL')
-    quit()
 check_proxy()
 req = tPool()
 kwargs = {
@@ -244,6 +236,14 @@ def alert():
 def main():
     global total_rooms_count
     rooms = []
+    SEARCH_URLS = []
+    with open('list_urls.txt', encoding='u8') as f:
+        for line in f:
+            if line.startswith('http'):
+                SEARCH_URLS.append(line.strip())
+    if not SEARCH_URLS:
+        print('需要先在 list_urls.txt 文件里按行放入自如搜索页的 URL')
+        quit()
     for url in SEARCH_URLS:
         rooms += fetch_rooms(url)
         # print(rooms)
@@ -257,6 +257,14 @@ def main():
     # 每次存储只存新的
     new_rooms = {room['room_id']: room for room in rooms}
     has_new_room = new_rooms.keys() - ss.rooms.keys()
+    room_changed = ss.rooms.keys() - new_rooms.keys()
+    if room_changed:
+        print('=' * 50)
+        print('房间发生变化')
+        for key in room_changed:
+            print(ss.rooms[key])
+        print('=' * 50)
+        alert()
     ss.rooms = new_rooms
     if has_new_room:
         print('新房间')
