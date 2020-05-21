@@ -3,21 +3,16 @@
 import re
 
 from bs4 import BeautifulSoup
-from torequests import threads, tPool
+from torequests import threads, tPool, Async
 from torequests.utils import Counts, Saver, countdown, find_one, ttime
-'''
-https://ip.ihuan.me/address/5YyX5Lqs.html
-PROXY = '111.202.247.50:8080'
-PROXY = '218.60.8.99:3129'
-'''
 
 
 def check_proxy():
     req = tPool()
     local_text = req.get('http://myip.ipip.net/', retry=1, timeout=3).text
     proxy_r = req.get('http://myip.ipip.net/',
-                      retry=1,
-                      timeout=3,
+                      retry=3,
+                      timeout=2,
                       proxies={
                           'http': PROXY,
                           'https': PROXY
@@ -28,8 +23,13 @@ def check_proxy():
     print('代理地址 OK, 开始抓取')
 
 
+'''
+https://ip.ihuan.me/address/5YyX5Lqs.html
+PROXY = '218.60.8.99:3129'
+116.196.85.150:3128
+'''
 CHECK_INTERVAL = 300
-PROXY = '116.196.85.150:3128'
+PROXY = '218.60.8.99:3129'
 MAX_DISTANCE = 1000
 check_proxy()
 req = tPool()
@@ -110,6 +110,7 @@ def fetch_list(url):
                     r'([\.0-9]+)㎡ \| (\d+)/(\d+)层', desc.text)[0]
                 tag = i.select_one('.info-box>h5').get('class')[-1]
                 result['items'].append({
+                    'room_id': find_one(r'/x/(\d+)\.html', href)[1],
                     'url': href,
                     'title': title,
                     'area': float(area),
@@ -161,7 +162,6 @@ def get_score(item):
 
 @threads(3)
 def fetch_detail(item):
-    item['room_id'] = find_one(r'/x/(\d+)\.html', item['url'])[1]
     if item['room_id'] in ss.rooms:
         item.update(ss.rooms[item['room_id']])
         return item
@@ -195,14 +195,15 @@ def fetch_detail(item):
         else:
             other_rooms += '空'
     item['other_rooms'] = other_rooms
-    item['status'] = '可预约:' + item['status'] if html.select_one(
-        '[class="Z_prelook active"]') else '不可预约:' + item['status']
+    if '可预约' not in item['status']:
+        item['status'] = '可预约:' + item['status'] if html.select_one(
+            '[class="Z_prelook active"]') else '不可预约:' + item['status']
     item['target'] = html.select_one(
         '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
     item['girls'] = item['other_rooms'].count('女')
     item['score'] = get_score(item)
     item['price'] = '-'
-    item['time'] = ttime()
+    item['time'] = item.get('time') or ttime()
     string = '\t'.join([str(item[i]) for i in keys])
     print(string, flush=1)
     item['string'] = string
@@ -218,9 +219,10 @@ def fetch_rooms(url):
     next_pages = result.get('next_pages')
     if next_pages:
         print('loading next_pages:', next_pages)
-        for new_url in next_pages:
-            result = fetch_list(new_url)
-            items = result.get('items') or []
+        async_fetch_list = Async(fetch_list, 3)
+        tasks = [async_fetch_list(new_url) for new_url in next_pages]
+        for task in tasks:
+            items = task.x.get('items') or []
             rooms.extend(items)
     return rooms
 
@@ -247,36 +249,40 @@ def main():
     for url in SEARCH_URLS:
         rooms += fetch_rooms(url)
         # print(rooms)
+    new_room_keys = {i['room_id'] for i in rooms}
+    # 把之前有, 新搜索结果没有的补进去重新抓取一次
+    old_rooms = ss.rooms
+    old_keys = set(old_rooms.keys())
+    refresh_keys = old_keys - new_room_keys
+    for key in refresh_keys:
+        rooms.append(old_rooms.pop(key))
+    ss.rooms = old_rooms
     rooms = [i for i in rooms if i['distance'] <= MAX_DISTANCE]
     total_rooms_count = len(rooms)
     tasks = [fetch_detail(room) for room in rooms]
     rooms = [i.x for i in tasks]
-    result = [room['string'] if room else room.text for room in rooms]
-    print('\n'.join(result), file=open('data.txt', 'w', encoding='u8'))
-    # 旧 room 里有, 新 room 里没有的话, 说明被删了, 清理掉
-    # 每次存储只存新的
+    # 旧 room 里有, 新 room 里没有的话, 说明被删了
     new_rooms = {room['room_id']: room for room in rooms}
-    has_new_room = new_rooms.keys() - ss.rooms.keys()
-    room_changed = ss.rooms.keys() - new_rooms.keys()
-    if room_changed:
-        print('=' * 50)
-        print('房间发生变化')
-        for key in room_changed:
-            print(ss.rooms[key])
-        print('=' * 50)
-        alert()
+    has_new_room = new_rooms.keys() - old_keys
     ss.rooms = new_rooms
+    print('\n'.join([i['string'] for i in ss.rooms.values()]),
+          file=open('data.txt', 'w', encoding='u8'))
     if has_new_room:
-        print('新房间')
+        print('新房间', has_new_room)
         alert()
     else:
         print('没有新房间')
 
 
 def loop():
-    while 1:
-        main()
-        countdown(CHECK_INTERVAL)
+    try:
+        while 1:
+            main()
+            countdown(CHECK_INTERVAL)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        countdown(10)
 
 
 if __name__ == "__main__":
