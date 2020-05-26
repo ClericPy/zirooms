@@ -51,7 +51,7 @@ kwargs = {
     },
     'timeout': 3
 }
-keys = 'room_id, title, location, distance, price, area, rooms, floor, max_floor, target, other_rooms, girls, score, time, status, url'.split(
+keys = 'room_id, title, location, distance, price, area, rooms, floor, max_floor, target, other_rooms, girls, score, time, status, tags, url'.split(
     ', ')
 cc = Counts()
 total_rooms_count = 0
@@ -77,10 +77,9 @@ def new_line_item(title, url):
         "girls": '-',
         "score": '-',
         "price": "-",
-        "time": "-"
+        "time": "-",
+        "tags": "-"
     }
-    string = '\t'.join([str(item[i]) for i in keys])
-    item['string'] = string
     return item
 
 
@@ -148,8 +147,8 @@ def fetch_list(url, with_new_line=False):
     if with_new_line:
         # 加个间隔行
         query = html.select_one('#Z_search_input').get('value') or ''
-        filters = [i.text.strip() for i in html.select('.f-res>.ct>a') or []]
-        title = f'- {query}{": " if query else ""}{filters}'
+        filters = [i.text.strip() for i in html.select('.f-res>.ct>a')]
+        title = f'- {query}{": " if query else ""}{", ".join(filters)}'
         result['items'].insert(0, new_line_item(title, url))
     return result
 
@@ -162,6 +161,11 @@ def get_score(item):
         score += (10 - target_score.index(item['target'])) / 10
     else:
         score += 0
+    # 独立卫生间 + 2, 独立阳台 + 1
+    if '独立卫生间' in item.get('tags', ''):
+        score += 1
+    if '独立阳台' in item.get('tags', ''):
+        score += 1
     # 女生数量减分, 每多一个, 减 0.5 分
     score -= 0.5 * item['girls']
     # 地铁距离分数, 越近分数越高
@@ -190,13 +194,20 @@ def get_score(item):
     return round(score, 2)
 
 
+def get_string(item):
+    string = '\t'.join([str(item[i]) for i in keys])
+    return string
+
+
 @threads(3)
 def fetch_detail(item):
     if not item['room_id'].isdigit():
         return item
     if item['room_id'] in ss.rooms:
-        item.update(ss.rooms[item['room_id']])
-        return item
+        exist_item = ss.rooms[item['room_id']]
+        if 'tags' in exist_item and 'string' not in exist_item:
+            item.update(exist_item)
+            return item
     print(cc.x,
           '/',
           total_rooms_count,
@@ -232,13 +243,13 @@ def fetch_detail(item):
             '[class="Z_prelook active"]') else '不可预约:' + item['status']
     item['target'] = html.select_one(
         '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
+    tags = ", ".join([i.text for i in html.select('.Z_tags>.tag')])
+    item['tags'] = tags or '-'
     item['girls'] = item['other_rooms'].count('女')
     item['score'] = get_score(item)
     item['price'] = '-'
     item['time'] = item.get('time') or ttime()
-    string = '\t'.join([str(item[i]) for i in keys])
-    print(string, flush=1)
-    item['string'] = string
+    print(get_string(item), flush=1)
     return item
 
 
@@ -261,7 +272,7 @@ def fetch_rooms(url):
 
 def alert():
     import winsound
-    for _ in range(5):
+    for _ in range(3):
         winsound.Beep(900, 300)
     import os
     os.system(r'explorer.exe .')
@@ -294,7 +305,7 @@ def main():
     tasks = [fetch_detail(room) for room in rooms]
     rooms = [i.x for i in tasks]
     # 不做去重, 因为是那个搜索结果页里的
-    print('\n'.join([i['string'] for i in rooms]),
+    print('\n'.join([get_string(i) for i in rooms]),
           file=open('data.txt', 'w', encoding='u8'))
     # 旧 room 里有, 新 room 里没有的话, 说明被删了
     new_rooms = {room['room_id']: room for room in rooms}
