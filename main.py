@@ -68,7 +68,7 @@ def new_line_item(title, url):
         "area": '-',
         "floor": '-',
         "max_floor": '-',
-        "distance": MAX_DISTANCE - 1,
+        "distance": '-',
         "location": "-",
         "status": "-",
         "rooms": '-',
@@ -306,7 +306,10 @@ def main():
     for key in refresh_keys:
         rooms.append(old_rooms.pop(key))
     ss.rooms = old_rooms
-    rooms = [i for i in rooms if i['distance'] <= MAX_DISTANCE]
+    rooms = [
+        i for i in rooms
+        if i['distance'] == '-' or i['distance'] <= MAX_DISTANCE
+    ]
     total_rooms_count = len(rooms)
     tasks = [fetch_detail(room) for room in rooms]
     rooms = [i.x for i in tasks]
