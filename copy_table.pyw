@@ -2,6 +2,7 @@ import pyperclip
 import winsound
 
 with open('data.txt', encoding='u8') as f:
-    pyperclip.copy(f.read())
+    source = f.read()
+    pyperclip.copy(source + '\n' * source.count('\n'))
 for _ in range(5):
     winsound.Beep(900, 300)
