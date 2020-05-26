@@ -16,6 +16,6 @@
 3. 双击 `copy_table.pyw` 复制到剪切板, 然后去模版 Google Sheets 对应位置粘贴即可
 4. 防止被封, 随手找了几个免费代理挂上
 
-附赠 Google Sheets 过滤器模版一个 [Link](https://docs.google.com/spreadsheets/d/1dUvZKIwjKiEW71jarkD-dinfKgSkb6nBrKOVy4xDUkE/edit#gid=1411738363) , 自己复制过去用
+附赠 Google Sheets 过滤器模版一个 [Link](https://docs.google.com/spreadsheets/d/1dUvZKIwjKiEW71jarkD-dinfKgSkb6nBrKOVy4xDUkE/edit?usp=sharing) , 自己复制过去用
 
 ![image](./pic.png) 

@@ -51,7 +51,7 @@ kwargs = {
     },
     'timeout': 3
 }
-keys = 'room_id, title, location, distance, price, area, rooms, floor, max_floor, target, other_rooms, girls, score, time, status, tags, url'.split(
+keys = 'room_id, title, rooms, location, distance, price, area, target, floor, max_floor, other_rooms, girls, score, time, status, tags, url'.split(
     ', ')
 cc = Counts()
 total_rooms_count = 0
@@ -205,7 +205,9 @@ def fetch_detail(item):
         return item
     if item['room_id'] in ss.rooms:
         exist_item = ss.rooms[item['room_id']]
-        if 'tags' in exist_item and 'string' not in exist_item:
+        if 'tags' in exist_item and 'string' not in exist_item and '√' in exist_item.get(
+                'status', '') and 'release' not in exist_item.get('status', ''):
+            # 已经抓过 tags, string 作为过期字段已经被清理掉, 可签约, 不是待释放
             item.update(exist_item)
             return item
     print(cc.x,
@@ -238,12 +240,16 @@ def fetch_detail(item):
         else:
             other_rooms += '空'
     item['other_rooms'] = other_rooms
-    if '可预约' not in item['status']:
-        item['status'] = '可预约:' + item['status'] if html.select_one(
-            '[class="Z_prelook active"]') else '不可预约:' + item['status']
+    if not ('√' in item['status'] or 'X' in item['status']):
+        ok = bool(html.select_one('[class="Z_prelook active"]'))
+    duration = html.select_one(
+        '#live-tempbox .jiance>li:nth-of-type(2) .info_value')
+    item[
+        'status'] = f'{"√" if ok else "X"}: {item["status"]}({duration.text if duration else "未知"})'
     item['target'] = html.select_one(
         '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
-    tags = ", ".join([i.text for i in html.select('.Z_tags>.tag')])
+    tags = [i.text for i in html.select('.Z_tags>.tag')]
+    tags = ", ".join(tags)
     item['tags'] = tags or '-'
     item['girls'] = item['other_rooms'].count('女')
     item['score'] = get_score(item)
