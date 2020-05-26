@@ -12,7 +12,7 @@ def check_proxy():
     local_text = req.get('http://myip.ipip.net/', retry=1, timeout=3).text
     proxy_r = req.get('http://myip.ipip.net/',
                       retry=3,
-                      timeout=2,
+                      timeout=1,
                       proxies={
                           'http': PROXY,
                           'https': PROXY
@@ -63,7 +63,7 @@ if not ss.rooms:
 def fetch_list(url):
     scode = ''
     for _ in range(5):
-        if '已为您找到符合条件' in scode and 'page' in scode:
+        if 'class="Z_list-box"' in scode and 'id="page"' in scode:
             break
         r = req.get(url, **kwargs)
         scode = r.text
@@ -169,7 +169,7 @@ def fetch_detail(item):
           '/',
           total_rooms_count,
           '采集房间',
-          item['title'],
+          item.get('title', ''),
           item['url'],
           flush=1)
     scode = ''
