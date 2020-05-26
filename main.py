@@ -142,6 +142,7 @@ def fetch_list(url, with_new_line=False):
                     'distance': int(distance),
                     'location': location,
                     'status': tag,
+                    'referer': url,
                 })
     print(f'采集到 {len(items)} 个房间, 在第 {page} 页 {title}')
     if with_new_line:
@@ -304,7 +305,10 @@ def main():
     old_keys = set(old_rooms.keys())
     refresh_keys = old_keys - new_room_keys
     for key in refresh_keys:
-        rooms.append(old_rooms.pop(key))
+        room = old_rooms.pop(key)
+        referer = room.get('referer')
+        if referer and referer in SEARCH_URLS:
+            rooms.append(room)
     ss.rooms = old_rooms
     rooms = [
         i for i in rooms
