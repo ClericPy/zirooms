@@ -3,8 +3,8 @@
 import re
 
 from bs4 import BeautifulSoup
-from torequests import threads, tPool, Async
-from torequests.utils import Counts, Saver, countdown, find_one, ttime
+from torequests import Async, threads, tPool
+from torequests.utils import Counts, Saver, countdown, find_one, md5, ttime
 
 
 def check_proxy():
@@ -60,7 +60,31 @@ if not ss.rooms:
     ss.rooms = {}
 
 
-def fetch_list(url):
+def new_line_item(title, url):
+    item = {
+        "room_id": f'-{md5(url, 10)}',
+        "url": url,
+        "title": title,
+        "area": '-',
+        "floor": '-',
+        "max_floor": '-',
+        "distance": MAX_DISTANCE - 1,
+        "location": "-",
+        "status": "-",
+        "rooms": '-',
+        "other_rooms": "-",
+        "target": "-",
+        "girls": '-',
+        "score": '-',
+        "price": "-",
+        "time": "-"
+    }
+    string = '\t'.join([str(item[i]) for i in keys])
+    item['string'] = string
+    return item
+
+
+def fetch_list(url, with_new_line=False):
     scode = ''
     for _ in range(5):
         if 'class="Z_list-box"' in scode and 'id="page"' in scode:
@@ -69,7 +93,7 @@ def fetch_list(url):
         scode = r.text
     else:
         print(scode)
-        print('程序崩溃, fetch_list 重试次数过多')
+        print('程序崩溃, fetch_list 重试次数过多', url)
         quit()
     result = {'items': []}
     html = BeautifulSoup(scode, features='html.parser')
@@ -121,6 +145,12 @@ def fetch_list(url):
                     'status': tag,
                 })
     print(f'采集到 {len(items)} 个房间, 在第 {page} 页 {title}')
+    if with_new_line:
+        # 加个间隔行
+        query = html.select_one('#Z_search_input').get('value') or ''
+        filters = [i.text.strip() for i in html.select('.f-res>.ct>a') or []]
+        title = f'- {query}{": " if query else ""}{filters}'
+        result['items'].insert(0, new_line_item(title, url))
     return result
 
 
@@ -162,6 +192,8 @@ def get_score(item):
 
 @threads(3)
 def fetch_detail(item):
+    if not item['room_id'].isdigit():
+        return item
     if item['room_id'] in ss.rooms:
         item.update(ss.rooms[item['room_id']])
         return item
@@ -180,7 +212,7 @@ def fetch_detail(item):
         scode = r.text
     else:
         print(scode)
-        print('程序崩溃, fetch_detail 重试次数过多')
+        print('程序崩溃, fetch_detail 重试次数过多', item['url'])
         quit()
     html = BeautifulSoup(scode, features='html.parser')
     item['title'] = html.select_one('h1.Z_name').text.replace('自如友家·', '')
@@ -212,7 +244,7 @@ def fetch_detail(item):
 
 def fetch_rooms(url):
     rooms = []
-    result = fetch_list(url)
+    result = fetch_list(url, with_new_line=True)
     items = result.get('items')
     if items:
         rooms.extend(items)
@@ -228,11 +260,11 @@ def fetch_rooms(url):
 
 
 def alert():
-    import os
-    os.system(r'explorer.exe .')
     import winsound
     for _ in range(5):
         winsound.Beep(900, 300)
+    import os
+    os.system(r'explorer.exe .')
 
 
 def main():
@@ -261,12 +293,13 @@ def main():
     total_rooms_count = len(rooms)
     tasks = [fetch_detail(room) for room in rooms]
     rooms = [i.x for i in tasks]
+    # 不做去重, 因为是那个搜索结果页里的
+    print('\n'.join([i['string'] for i in rooms]),
+          file=open('data.txt', 'w', encoding='u8'))
     # 旧 room 里有, 新 room 里没有的话, 说明被删了
     new_rooms = {room['room_id']: room for room in rooms}
     has_new_room = new_rooms.keys() - old_keys
     ss.rooms = new_rooms
-    print('\n'.join([i['string'] for i in ss.rooms.values()]),
-          file=open('data.txt', 'w', encoding='u8'))
     if has_new_room:
         print('新房间', has_new_room)
         alert()
