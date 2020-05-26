@@ -8,6 +8,7 @@ from torequests.utils import Counts, Saver, countdown, find_one, md5, ttime
 
 
 def check_proxy():
+    print('代理测试:', PROXY)
     req = tPool()
     local_text = req.get('http://myip.ipip.net/', retry=1, timeout=3).text
     proxy_r = req.get('http://myip.ipip.net/',
@@ -23,13 +24,15 @@ def check_proxy():
     print('代理地址 OK, 开始抓取')
 
 
-'''
+IPS = '''
 https://ip.ihuan.me/address/5YyX5Lqs.html
 PROXY = '218.60.8.99:3129'
-116.196.85.150:3128
+39.137.69.10	8080
 '''
 CHECK_INTERVAL = 300
-PROXY = '218.60.8.99:3129'
+PROXY = IPS.strip().splitlines()[-1]
+if ':' not in PROXY:
+    PROXY = ':'.join(PROXY.split())
 MAX_DISTANCE = 1000
 check_proxy()
 req = tPool()
