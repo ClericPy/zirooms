@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import os
 import re
 from tkinter.messagebox import showerror
 
@@ -8,7 +9,7 @@ from torequests import Async, threads, tPool
 from torequests.utils import Counts, Saver, countdown, find_one, md5, ttime
 
 
-def check_proxy():
+def refresh_proxy():
     req = tPool()
     r = req.get(
         'https://ip.ihuan.me/today.html',
@@ -42,9 +43,9 @@ def check_proxy():
         }).text
     ips = re.findall(r'\d+\.\d+\.\d+\.\d+:\d+', detail_text)
     print(len(ips), 'ips')
+    local_text = req.get('http://myip.ipip.net/', retry=1, timeout=3).text
     for PROXY in ips:
         print('代理测试:', PROXY)
-        local_text = req.get('http://myip.ipip.net/', retry=1, timeout=3).text
         proxy_r = req.get('http://myip.ipip.net/',
                           timeout=1,
                           proxies={
@@ -52,23 +53,22 @@ def check_proxy():
                               'https': PROXY
                           }).x
         if not proxy_r or proxy_r.text == local_text:
-            print(f'{PROXY} 代理故障, 请更换代理地址. {proxy_r}: {proxy_r.text}')
+            print(f'{PROXY} 代理错误, 更换代理地址. {proxy_r}: {proxy_r.text}')
             continue
         else:
             break
     else:
-        print('代理获取失败')
-        quit()
+        print('代理获取全部失败, 程序崩溃')
+        os._exit(1)
     print('代理地址 OK, 开始抓取')
+    kwargs['proxies'] = {'http': PROXY, 'https': PROXY}
     return PROXY
 
-
-# <div class="panel-body">39.137.69.7:8080<br>39.137.69.9:80<br>39.137.69.8:8080<br>39.137.107.98:80<br>39.137.69.9:8080<br>39.137.69.7:80<br>39.137.69.6:80<br>39.137.69.6:8080<br>39.137.69.10:8080<br>221.180.170.104:8080<br><br>39.137.69.10:80<br>39.137.69.8:80<br>140.143.137.69:1080<br>123.207.11.119:1080<br>140.143.142.218:1080<br>123.207.43.128:1080<br>140.143.156.166:1080<br>118.24.172.37:1080<br>123.207.66.220:1080<br>118.24.89.206:1080<br>140.143.142.200:1080<br>118.24.170.46:1080<br>118.24.128.46:1080<br>139.199.201.249:1080<br>119.29.177.120:1080<br>139.199.153.25:1080<br>118.24.89.122:1080<br>140.143.152.93:1080<br>123.207.91.165:1080<br>140.143.142.14:1080<br>118.69.50.154:80<br>123.207.57.145:1080<br>181.118.167.104:80<br>12.139.101.97:80<br>118.24.90.160:1080<br>118.24.88.240:1080<br>118.24.127.144:1080<br>118.24.88.66:1080<br>140.143.6.16:1080<br>58.87.98.150:1080<br>45.137.217.27:80<br>110.44.126.83:3128<br>118.24.172.149:1080<br>36.249.119.10:9999<br>18.230.156.115:80<br>182.34.33.222:9999<br>123.169.96.29:9999<br>118.212.105.183:9999<br>103.46.225.67:8080<br>192.200.200.73:3128<br>154.127.11.237:8080<br>112.84.73.254:9999<br>60.188.3.119:3000<br>177.85.98.173:80<br>220.249.149.76:9999<br>60.177.157.82:9000<br>36.249.49.25:9999<br>223.242.225.11:9999<br>123.163.97.191:9999<br>223.242.224.37:9999<br>131.196.141.167:33729<br>183.166.102.2:9999<br>58.253.154.66:9999<br>58.22.177.33:9999<br>78.188.218.10:15963<br>172.104.135.13:8118<br>183.166.70.246:9999<br>182.34.35.227:9999<br>58.22.177.117:9999<br>113.128.120.213:9999<br>223.242.224.216:9999<br>223.242.225.111:9999<br>36.249.109.11:9999<br>111.93.59.130:3129<br>163.204.243.69:9999<br>110.243.0.87:9999<br>139.5.16.49:8080<br>131.196.143.44:33729<br>60.13.42.211:9999<br>213.142.148.10:3128<br>191.97.26.168:45210<br>223.242.224.57:9999<br>183.166.70.89:9999<br>223.242.224.115:9999<br>36.249.109.3:9999<br>223.242.225.128:9999<br>220.249.149.111:9999<br>36.248.132.206:9999<br>36.249.49.43:9999<br>36.249.52.32:9999<br>110.243.12.78:9999<br>58.253.158.229:9999<br>183.166.21.195:9999<br>220.249.149.152:9999<br>36.250.156.178:9999<br>182.34.37.209:9999<br>60.13.42.142:9999<br>110.243.11.127:9999<br>36.57.86.112:9999<br></div>
 
 IPS = '''https://ip.ihuan.me/address/5YyX5Lqs.html'''
 CHECK_INTERVAL = 180
 MAX_DISTANCE = 1200
-PROXY = check_proxy()
+
 req = tPool()
 kwargs = {
     'headers': {
@@ -81,10 +81,10 @@ kwargs = {
         "Accept-Language": "zh-CN,zh;q=0.9",
         "Cookie": ""
     },
-    'retry': 3,
+    'retry': 2,
     'proxies': {
-        'http': PROXY,
-        'https': PROXY
+        'http': None,
+        'https': None
     },
     'timeout': 3
 }
@@ -130,7 +130,7 @@ def fetch_list(url, with_new_line=False):
     else:
         print(scode)
         print('程序崩溃, fetch_list 重试次数过多', url)
-        quit()
+        raise RequestErrorForRetry()
     result = {'items': []}
     html = BeautifulSoup(scode, features='html.parser')
     # print(scode)
@@ -267,7 +267,8 @@ def fetch_detail(item):
     else:
         print(scode)
         print('程序崩溃, fetch_detail 重试次数过多', item['url'])
-        quit()
+        raise RequestErrorForRetry()
+
     html = BeautifulSoup(scode, features='html.parser')
     item['title'] = html.select_one('h1.Z_name').text.replace('自如友家·', '')
     neighbors = html.select('#meetinfo ul.rent_list>li')
@@ -352,7 +353,7 @@ def main():
                 SEARCH_URLS.append(line.strip())
     if not SEARCH_URLS:
         print('需要先在 list_urls.txt 文件里按行放入自如搜索页的 URL')
-        quit()
+        os._exit(1)
     for url in SEARCH_URLS:
         rooms += fetch_rooms(url)
         # print(rooms)
@@ -390,11 +391,19 @@ def main():
         print('没有新房间')
 
 
+class RequestErrorForRetry(Exception):
+    pass
+
+
 def loop():
     try:
         while 1:
-            main()
-            countdown(CHECK_INTERVAL)
+            try:
+                refresh_proxy()
+                main()
+                countdown(CHECK_INTERVAL)
+            except RequestErrorForRetry:
+                print('更换代理重试')
     except Exception:
         import traceback
         showerror('Error', traceback.format_exc())
