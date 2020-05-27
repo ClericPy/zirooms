@@ -251,6 +251,8 @@ def fetch_detail(item):
             # 已经抓过 tags, string 作为过期字段已经被清理掉, 可签约, 不是待释放
             item.update(exist_item)
             return item
+        else:
+            item['time'] = exist_item.get('time') or ttime()
     print(cc.x,
           '/',
           total_rooms_count,
