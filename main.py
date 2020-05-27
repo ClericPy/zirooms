@@ -122,16 +122,18 @@ def new_line_item(title, url):
 
 def fetch_list(url, with_new_line=False):
     scode = ''
+    result = {'items': []}
     for _ in range(5):
         if 'class="Z_list-box"' in scode and 'id="page"' in scode:
             break
+        elif 'Z_list-empty' in scode:
+            return result
         r = req.get(url, **kwargs)
         scode = r.text
     else:
         print(scode)
         print('程序崩溃, fetch_list 重试次数过多', url)
         raise RequestErrorForRetry()
-    result = {'items': []}
     html = BeautifulSoup(scode, features='html.parser')
     # print(scode)
     title = html.select_one('title').text
@@ -332,7 +334,10 @@ def fetch_rooms(url):
         async_fetch_list = Async(fetch_list, 3)
         tasks = [async_fetch_list(new_url) for new_url in next_pages]
         for task in tasks:
-            items = task.x.get('items') or []
+            tmp_result = task.x
+            if not tmp_result and isinstance(tmp_result.error, RequestErrorForRetry):
+                raise tmp_result.error
+            items = tmp_result.get('items') or []
             rooms.extend(items)
     return rooms
 
@@ -379,6 +384,9 @@ def main():
     total_rooms_count = len(rooms)
     tasks = [fetch_detail(room) for room in rooms]
     rooms = [i.x for i in tasks]
+    for i in rooms:
+        if not i:
+            raise i.error
     # 不做去重, 因为是那个搜索结果页里的
     print('\n'.join([get_string(i) for i in rooms]),
           file=open('data.txt', 'w', encoding='u8'))
