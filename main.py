@@ -408,13 +408,14 @@ class RequestErrorForRetry(Exception):
 
 def loop():
     try:
+        refresh_proxy()
         while 1:
             try:
-                refresh_proxy()
                 main()
                 countdown(CHECK_INTERVAL)
             except RequestErrorForRetry:
                 print('更换代理重试')
+                refresh_proxy()
     except Exception:
         import traceback
         traceback.print_exc()
