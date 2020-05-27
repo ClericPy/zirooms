@@ -283,10 +283,14 @@ def fetch_detail(item):
     item['other_rooms'] = other_rooms
     if not ('√' in item['status'] or 'X' in item['status']):
         ok = bool(html.select_one('[class="Z_prelook active"]'))
-    duration = html.select_one(
-        '#live-tempbox .jiance>li:nth-of-type(2) .info_value')
-    item[
-        'status'] = f'{"√" if ok else "X"}: {item["status"]}({duration.text if duration else "未知"})'
+    duration = '未知'
+    for i in html.select('#live-tempbox .jiance>li'):
+        if '签约时长' in i.text:
+            tag = i.select_one('.info_value')
+            if tag:
+                duration = tag.text
+            break
+    item['status'] = f'{"√" if ok else "X"}: {item["status"]}({duration})'
     item['target'] = html.select_one(
         '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
     tags = [i.text for i in html.select('.Z_tags>.tag')]
@@ -349,6 +353,8 @@ def main():
         referer = room.get('referer')
         if referer and referer in SEARCH_URLS:
             rooms.append(room)
+        else:
+            print('忽略错误 referer 的房间:', room)
     ss.rooms = old_rooms
     rooms = [
         i for i in rooms
