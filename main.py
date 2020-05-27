@@ -198,11 +198,11 @@ def get_score(item):
         score += (10 - target_score.index(item['target'])) / 10
     else:
         score += 0
-    # 独立卫生间 + 2, 独立阳台 + 1
+    # 独立卫生间 + 1, 独立阳台 * 1.1
     if '独立卫生间' in item.get('tags', ''):
         score += 1
     if '独立阳台' in item.get('tags', ''):
-        score += 1
+        score *= 1.1
     # 女生数量减分, 每多一个, 减 0.5 分
     score -= 0.5 * item['girls']
     # 地铁距离分数, 越近分数越高
