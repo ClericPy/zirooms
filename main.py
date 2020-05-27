@@ -283,14 +283,27 @@ def fetch_detail(item):
     item['other_rooms'] = other_rooms
     if not ('√' in item['status'] or 'X' in item['status']):
         ok = bool(html.select_one('[class="Z_prelook active"]'))
-    duration = '未知'
+    duration = '未知时长'
     for i in html.select('#live-tempbox .jiance>li'):
         if '签约时长' in i.text:
             tag = i.select_one('.info_value')
             if tag:
                 duration = tag.text
             break
-    item['status'] = f'{"√" if ok else "X"}: {item["status"]}({duration})'
+    # 空气检测
+    air = '空气检测结果未知'
+    for i in html.select('#areacheck .jiance>li'):
+        if '检测日期' in i.text:
+            tag = i.select_one('.info_value')
+            if tag:
+                air = '检测日期: %s' % tag.text
+            break
+        elif '空置时长' in i.text:
+            tag = i.select_one('.info_value')
+            if tag:
+                air = '空置时长: %s' % tag.text
+            break
+    item['status'] = f'{"√" if ok else "X"}: {item["status"]}({duration}|{air})'
     item['target'] = html.select_one(
         '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
     tags = [i.text for i in html.select('.Z_tags>.tag')]
@@ -382,8 +395,9 @@ def loop():
         while 1:
             main()
             countdown(CHECK_INTERVAL)
-    except Exception as e:
-        showerror('Error', repr(e))
+    except Exception:
+        import traceback
+        showerror('Error', traceback.format_exc())
 
 
 if __name__ == "__main__":
