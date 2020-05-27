@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import re
+from tkinter.messagebox import showerror
 
 from bs4 import BeautifulSoup
 from torequests import Async, threads, tPool
-from torequests.utils import Counts, Saver, countdown, find_one, md5, ttime, curlparse
+from torequests.utils import Counts, Saver, countdown, find_one, md5, ttime
 
 
 def check_proxy():
@@ -375,10 +376,8 @@ def loop():
         while 1:
             main()
             countdown(CHECK_INTERVAL)
-    except Exception:
-        import traceback
-        traceback.print_exc()
-        countdown(10)
+    except Exception as e:
+        showerror('Error', repr(e))
 
 
 if __name__ == "__main__":
