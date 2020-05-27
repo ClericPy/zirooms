@@ -294,7 +294,7 @@ def fetch_detail(item):
                 duration = tag.text
             break
     # 空气检测
-    air = '空气检测结果未知'
+    air = '无空气检测结果'
     for i in html.select('#areacheck .jiance>li'):
         if '检测日期' in i.text:
             tag = i.select_one('.info_value')
@@ -308,8 +308,12 @@ def fetch_detail(item):
             break
     ok = '-'
     if not ('√' in item['status'] or 'X' in item['status']):
-        ok = bool(html.select_one('[class="Z_prelook active"]'))
-    item['status'] = f'{"√" if ok else "X"}: {item["status"]}({duration}|{air})'
+        if html.select_one('[class="Z_prelook active"]'):
+            ok = '√'
+        else:
+            ok = 'X'
+    if not ('检测日期' in item['status'] or '空置时长' in item['status']):
+        item['status'] = f'{"√" if ok else "X"}: {item["status"]}({duration}|{air})'
     item['target'] = html.select_one(
         '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
     tags = [i.text for i in html.select('.Z_tags>.tag')]
