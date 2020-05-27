@@ -9,10 +9,36 @@ from torequests.utils import Counts, Saver, countdown, find_one, md5, ttime, cur
 
 def check_proxy():
     req = tPool()
-    r = req.get('https://ip.ihuan.me/today.html')
+    r = req.get(
+        'https://ip.ihuan.me/today.html',
+        retry=2,
+        timeout=3,
+        headers={
+            "Connection": "keep-alive",
+            "Cache-Control": "max-age=0",
+            "Upgrade-Insecure-Requests": "1",
+            "Dnt": "1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Cookie": ""
+        })
     detail = 'https://ip.ihuan.me/today/%s' % find_one('href="/today/([^"]+)"',
                                                        r.text)[1]
-    detail_text = req.get(detail).text
+    detail_text = req.get(
+        detail,
+        retry=2,
+        timeout=3,
+        headers={
+            "Connection": "keep-alive",
+            "Cache-Control": "max-age=0",
+            "Upgrade-Insecure-Requests": "1",
+            "Dnt": "1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+            "Cookie": ""
+        }).text
     ips = re.findall(r'\d+\.\d+\.\d+\.\d+:\d+', detail_text)
     print(len(ips), 'ips')
     for PROXY in ips:
