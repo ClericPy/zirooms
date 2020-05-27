@@ -286,8 +286,6 @@ def fetch_detail(item):
         else:
             other_rooms += '空'
     item['other_rooms'] = other_rooms
-    if not ('√' in item['status'] or 'X' in item['status']):
-        ok = bool(html.select_one('[class="Z_prelook active"]'))
     duration = '未知时长'
     for i in html.select('#live-tempbox .jiance>li'):
         if '签约时长' in i.text:
@@ -308,6 +306,9 @@ def fetch_detail(item):
             if tag:
                 air = '空置时长: %s' % tag.text
             break
+    ok = '-'
+    if not ('√' in item['status'] or 'X' in item['status']):
+        ok = bool(html.select_one('[class="Z_prelook active"]'))
     item['status'] = f'{"√" if ok else "X"}: {item["status"]}({duration}|{air})'
     item['target'] = html.select_one(
         '.Z_home_info>.Z_home_b>dl:nth-of-type(2)>dd').text
@@ -416,6 +417,7 @@ def loop():
                 print('更换代理重试')
     except Exception:
         import traceback
+        traceback.print_exc()
         showerror('Error', traceback.format_exc())
 
 
