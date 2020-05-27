@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import os
 import re
 from tkinter.messagebox import showerror
 
@@ -58,8 +57,9 @@ def refresh_proxy():
         else:
             break
     else:
-        print('代理获取全部失败, 程序崩溃')
-        os._exit(1)
+        msg = '代理获取全部失败, 程序崩溃'
+        print(msg)
+        raise RuntimeError(msg)
     print('代理地址 OK, 开始抓取')
     kwargs['proxies'] = {'http': PROXY, 'https': PROXY}
     return PROXY
@@ -360,8 +360,9 @@ def main():
             if line.startswith('http'):
                 SEARCH_URLS.append(line.strip())
     if not SEARCH_URLS:
-        print('需要先在 list_urls.txt 文件里按行放入自如搜索页的 URL')
-        os._exit(1)
+        msg = '需要先在 list_urls.txt 文件里按行放入自如搜索页的 URL'
+        print(msg)
+        raise RuntimeError(msg)
     for url in SEARCH_URLS:
         rooms += fetch_rooms(url)
         # print(rooms)
