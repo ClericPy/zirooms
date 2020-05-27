@@ -67,7 +67,7 @@ def refresh_proxy():
 
 IPS = '''https://ip.ihuan.me/address/5YyX5Lqs.html'''
 CHECK_INTERVAL = 180
-MAX_DISTANCE = 1200
+MAX_DISTANCE = 1000
 
 req = tPool()
 kwargs = {
